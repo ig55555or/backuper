@@ -5,11 +5,12 @@ import xml.etree.cElementTree as ET
 import re
 
 class CreateConfig:
-    def __init__(self, url, user, pwd, path):
+    def __init__(self, url, user, pwd, path, ssl):
         self.url = url
         self.user = user
         self.pwd = pwd
         self.path = path
+        self.ssl = ssl
 
 
     # извлекаем токен
@@ -23,13 +24,13 @@ class CreateConfig:
     # авторизируемся и получаем куки и токен
     def auth(self):
         try:
-            kek = requests.get(self.url + "index.php", verify=False)
+            kek = requests.get(self.url + "index.php", verify=self.ssl)
             kek = requests.post(self.url + 'index.php', {
                 '__csrf_magic': self.token(kek.text),
                 'usernamefld': self.user,
                 'passwordfld': self.pwd,
                 'login': 'Sign+In',
-            }, verify=False)
+            }, verify=self.ssl)
 
             data = [kek.cookies, self.token(kek.text)]
         except Exception as e:
@@ -54,7 +55,7 @@ class CreateConfig:
                 'restorearea': '',
                 'conffile': '(binary)',
                 'decrypt_password': '',
-            }, verify=False, cookies=cookies)
+            }, verify=self.ssl, cookies=cookies)
         except Exception as e:
             print(e)
         return kek.content
@@ -66,7 +67,7 @@ class CreateConfig:
 
     def go(self): #функция сохраннеия бэкапа
         try:
-            r = requests.get(self.url + "index.php", verify=True)
+            r = requests.get(self.url + "index.php", verify=self.ssl)
             if r.status_code == 200:
                 print('Success!')
                 cfg = self.getcfg()
@@ -76,32 +77,6 @@ class CreateConfig:
         except Exception as e:
             print(e)
 
-    def checkconn(self, url):
-        try:
-            ssl = False
-            r = requests.get(self.url + "index.php", verify=ssl)
-            if r.status_code == 200:
-                print('Success!')
-                return [ssl, 'good']
-            else:
-                print('Error. Status code not 200 ' + r.status_code)
-                return [ssl, 'bad200', r.status_code]
-
-        except Exception as e:
-            print('Ошибка ' + e)
-            return [ssl, 'ex', e]
-
-        except requests.exceptions.SSLError:
-            print('Сертификат ssl недействителен, отключаем проверку')
-            ssl = True
-            r = requests.get(self.url + "index.php", verify=ssl)
-            if r.status_code == 200:
-                print('Success!')
-                return [ssl, 'good']
-            else:
-                print('Error.')
-                return [ssl, 'sslbad']
-
 
 
 
@@ -110,7 +85,7 @@ class Settings():
 
     def checkconn(self, url):
         try:
-            ssl = False
+            ssl = True
             r = requests.get(url + "index.php", verify=ssl)
             if r.status_code == 200:
                 print('Success!')
@@ -119,20 +94,20 @@ class Settings():
                 print('Error. Status code not 200 ' + r.status_code)
                 return [ssl, 'bad200', r.status_code]
 
-        except Exception as e:
-            print('Ошибка ' + e)
-            return [ssl, 'ex', e]
-
         except requests.exceptions.SSLError:
             print('Сертификат ssl недействителен, отключаем проверку')
-            ssl = True
+            ssl = False
             r = requests.get(url + "index.php", verify=ssl)
             if r.status_code == 200:
                 print('Success!')
                 return [ssl, 'good']
             else:
-                print('Error.')
-                return [ssl, 'sslbad']
+                print('Error ' + r.status_code)
+                return [ssl, 'bad']
+
+        except Exception as e:
+            print('Ошибка ' + e)
+            return [ssl, 'ex', e]
 
             ##############################################
 
@@ -147,7 +122,7 @@ class Settings():
 
     def startpars(self):
         conf = self.readConfXML()
-        cfg = CreateConfig(conf[0].text, conf[1].text, conf[2].text, conf[3].text)
+        cfg = CreateConfig(conf[0].text, conf[1].text, conf[2].text, conf[3].text, bool(conf[4].text))
         cfg.go()
 
 
@@ -173,12 +148,12 @@ class Settings():
         textc = self.checkurl()
         print('Проверка подключения...')
         status = self.checkconn(textc)
-
-        while status[1] != 'good' or status[1] != 'sslbad':
+        while status[1] != 'good':
             textc = self.checkurl()
             status = CreateConfig.checkconn(textc)
 
         url.text = textc
+        ssl.text = str(status[0])
         #
 
 
@@ -199,12 +174,6 @@ class Settings():
         pwd.text = textc
 
         path = xml.SubElement(root, "path")
-        '''
-        textc = input("Введите путь сохранения конфигов ")
-        while len(textc) <= 0:
-            print('Пароль не может быть пустым')
-            textc = input("Введите пароль ")
-        '''
         path.text = input("Введите путь сохранения конфигов ")
 
         x = xml.ElementTree(root)
