@@ -12,6 +12,12 @@ class CreateConfig:
         self.path = path
         self.ssl = ssl
 
+        if self.ssl == "True":
+            self.sll = True
+        elif ssl == "False":
+            self.ssl = False
+
+
 
     # извлекаем токен
     def token(self, text):
@@ -122,7 +128,7 @@ class Settings():
 
     def startpars(self):
         conf = self.readConfXML()
-        cfg = CreateConfig(conf[0].text, conf[1].text, conf[2].text, conf[3].text, bool(conf[4].text))
+        cfg = CreateConfig(conf[0].text, conf[2].text, conf[3].text, conf[4].text, conf[1].text)
         cfg.go()
 
 

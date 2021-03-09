@@ -6,6 +6,7 @@ from Config import Settings
 
 
 
+
 b = Settings().start()
 
 #жопа
