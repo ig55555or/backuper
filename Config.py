@@ -4,7 +4,46 @@ import xml.etree.ElementTree as xml
 import xml.etree.cElementTree as ET
 import re
 
-class CreateConfig:
+class Connect:
+
+    def checkconn(url):
+        try:
+            ssl = True
+            r = requests.get(url + "index.php", verify=ssl)
+            if r.status_code == 200:
+                print('Success connect!')
+                if r.text.find('pfSense') < 0:
+                    print('Это не pfSense')
+                    return [ssl, 'negood', r.status_code]
+                else:
+                    return [ssl, 'good', r.status_code]
+            else:
+                print('Error. Status code not 200. It is: ' + str(r.status_code))
+                return [ssl, 'bad200', r.status_code]
+
+        except requests.exceptions.SSLError:
+            print('Сертификат ssl недействителен, отключаем проверку')
+            ssl = False
+            r = requests.get(url + "index.php", verify=ssl)
+            if r.status_code == 200:
+                print('Success connect!')
+
+                if r.text.find('pfSense') < 0:
+                    print('Это не pfSense')
+                    return [ssl, 'negood', r.status_code]
+                else:
+                    return [ssl, 'good', r.status_code]
+
+            else:
+                print('Error. Status code not 200. It is: ' + str(r.status_code))
+                return [ssl, 'bad', r.status_code]
+
+        except Exception as e:
+            print('Ошибка ' + e)
+            return [ssl, 'ex', e]
+
+
+class CreateConfig(Connect):
     def __init__(self, url, user, pwd, path, ssl):
         self.url = url
         self.user = user
@@ -85,44 +124,9 @@ class CreateConfig:
 
 
 
-class Settings():
+class Settings(Connect):
     ##################################################
 
-    def checkconn(self, url):
-        try:
-            ssl = True
-            r = requests.get(url + "index.php", verify=ssl)
-            if r.status_code == 200:
-                print('Success connect!')
-                if r.text.find('pfSense') < 0:
-                    print('Это не pfSense')
-                    return [ssl, 'negood', r.status_code]
-                else:
-                    return [ssl, 'good', r.status_code]
-            else:
-                print('Error. Status code not 200. It is: ' + str(r.status_code))
-                return [ssl, 'bad200', r.status_code]
-
-        except requests.exceptions.SSLError:
-            print('Сертификат ssl недействителен, отключаем проверку')
-            ssl = False
-            r = requests.get(url + "index.php", verify=ssl)
-            if r.status_code == 200:
-                print('Success connect!')
-
-                if r.text.find('pfSense') < 0:
-                    print('Это не pfSense')
-                    return [ssl, 'negood', r.status_code]
-                else:
-                    return [ssl, 'good', r.status_code]
-
-            else:
-                print('Error. Status code not 200. It is: ' + str(r.status_code))
-                return [ssl, 'bad', r.status_code]
-
-        except Exception as e:
-            print('Ошибка ' + e)
-            return [ssl, 'ex', e]
 
             ##############################################
 
@@ -160,10 +164,10 @@ class Settings():
         #Проверка Url
         textc = self.checkurl()
         print('Проверка подключения...')
-        status = self.checkconn(textc)
+        status = Connect.checkconn(textc)
         while status[1] != 'good':
             textc = self.checkurl()
-            status = self.checkconn(textc)
+            status = Connect.checkconn(textc)
 
 
         url.text = textc
