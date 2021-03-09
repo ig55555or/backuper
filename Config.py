@@ -10,13 +10,12 @@ class CreateConfig:
         self.user = user
         self.pwd = pwd
         self.path = path
-        self.ssl = ssl
+        self.ssl = False
 
-        if self.ssl == "True":
+        if ssl == "True":
             self.sll = True
         elif ssl == "False":
             self.ssl = False
-
 
 
     # извлекаем токен
@@ -94,10 +93,14 @@ class Settings():
             ssl = True
             r = requests.get(url + "index.php", verify=ssl)
             if r.status_code == 200:
-                print('Success!')
-                return [ssl, 'good']
+                print('Success connect!')
+                if r.text.find('pfSense') < 0:
+                    print('Это не pfSense')
+                    return [ssl, 'negood', r.status_code]
+                else:
+                    return [ssl, 'good', r.status_code]
             else:
-                print('Error. Status code not 200 ' + r.status_code)
+                print('Error. Status code not 200. It is: ' + str(r.status_code))
                 return [ssl, 'bad200', r.status_code]
 
         except requests.exceptions.SSLError:
@@ -105,11 +108,17 @@ class Settings():
             ssl = False
             r = requests.get(url + "index.php", verify=ssl)
             if r.status_code == 200:
-                print('Success!')
-                return [ssl, 'good']
+                print('Success connect!')
+
+                if r.text.find('pfSense') < 0:
+                    print('Это не pfSense')
+                    return [ssl, 'negood', r.status_code]
+                else:
+                    return [ssl, 'good', r.status_code]
+
             else:
-                print('Error ' + r.status_code)
-                return [ssl, 'bad']
+                print('Error. Status code not 200. It is: ' + str(r.status_code))
+                return [ssl, 'bad', r.status_code]
 
         except Exception as e:
             print('Ошибка ' + e)
@@ -144,9 +153,7 @@ class Settings():
 
     def crateConfXML(self):
 
-
         root = xml.Element("Config")
-
         url = xml.SubElement(root, "url")
         ssl = xml.SubElement(root, 'ssl')
 
@@ -156,7 +163,8 @@ class Settings():
         status = self.checkconn(textc)
         while status[1] != 'good':
             textc = self.checkurl()
-            status = CreateConfig.checkconn(textc)
+            status = self.checkconn(textc)
+
 
         url.text = textc
         ssl.text = str(status[0])
