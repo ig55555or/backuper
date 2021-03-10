@@ -6,7 +6,6 @@ import re
 
 
 class Connect:
-
     def checkconn(self, url):
         try:
             ssl = True
@@ -132,80 +131,3 @@ class CreateConfig(Connect):
         except Exception as e:
             print(e)
 
-
-class Settings(Connect):
-
-    def start(self):
-        if (os.path.exists('settings.xml')):
-            print('Конфигурационный файл найден ')
-            self.startpars()
-        else:
-            print('Конфигурационный файл не найден, создание конфигурационного файла: ')
-            self.crateconfxml()
-            self.startpars()
-
-    def startpars(self):
-        conf = self.readconfxml()
-        cfg = CreateConfig(conf[0].text, conf[2].text, conf[3].text, conf[4].text, conf[1].text)
-        cfg.go()
-
-    def checkurl(self):  # Проверка url
-        chckurl = 'https?://(?:www\.|)([\w.-]+).*'
-        textc = input("Введите url ")
-        while re.search(chckurl, textc) == None or textc.find('http') < 0:
-            print('Неверный url')
-            textc = input("Введите url ")
-        url = re.search(chckurl, textc).string + '/'
-        return url
-
-    def crateconfxml(self):
-
-        root = xml.Element("Config")
-        url = xml.SubElement(root, "url")
-        ssl = xml.SubElement(root, 'ssl')
-        user = xml.SubElement(root, "user")
-        pwd = xml.SubElement(root, "pwd")
-        path = xml.SubElement(root, "path")
-
-        # Проверка Url
-        textc = self.checkurl()
-        print('Проверка подключения...')
-        status = Connect().checkconn(textc)
-        while status[1] != 'good':
-            textc = self.checkurl()
-            status = Connect().checkconn(textc)
-
-        url.text = textc
-        ssl.text = str(status[0])
-        sslbuff = status[0]
-
-        while status[2] != 'success':
-            textc = input("Введите имя пользователя ")
-            while len(textc) <= 0:
-                print('Имя пользователя не может быть пустым')
-                textc = input("Введите имя пользователя ")
-            user.text = textc
-
-            textc = input("Введите пароль ")
-            while len(textc) <= 0:
-                print('Пароль не может быть пустым')
-                textc = input("Введите пароль ")
-            pwd.text = textc
-
-            status = Connect().auth(url.text, sslbuff, pwd.text, user.text)
-            if status[2] != 'success':
-                print('Имя пользователя и/или пароль неверны')
-
-        path.text = input("Введите путь сохранения конфигов ")
-
-        x = xml.ElementTree(root)
-        with open("settings.xml", "wb") as fh:
-            x.write(fh)
-
-    def readconfxml(self):
-        try:
-            tree = ET.parse("settings.xml")
-            root = tree.getroot()
-        except Exception as e:
-            print(e)
-        return root
