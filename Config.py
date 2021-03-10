@@ -56,23 +56,29 @@ class Connect:
         # авторизируемся и получаем куки и токен
 
     def auth(self, url, ssl, pwd, user):
-        try:
-            kek = requests.get(url + "index.php", verify=ssl)
-            kek = requests.post(url + 'index.php', {
-                '__csrf_magic': self.token(kek.text),
-                'usernamefld': user,
-                'passwordfld': pwd,
-                'login': 'Sign+In',
-            }, verify=ssl)
+        status = self.checkconn(url)
+        if status[1] == 'good':
+            try:
+                kek = requests.get(url + "index.php", verify=ssl)
+                kek = requests.post(url + 'index.php', {
+                    '__csrf_magic': self.token(kek.text),
+                    'usernamefld': user,
+                    'passwordfld': pwd,
+                    'login': 'Sign+In',
+                }, verify=ssl)
 
-            state = 'no'
-            if kek.text.find('Sign In') < 0:
-                state = 'success'
-            data = [kek.cookies, self.token(kek.text), state]
+                state = 'no'
+                if kek.text.find('Sign In') < 0:
+                    state = 'success'
+                data = [kek.cookies, self.token(kek.text), state]
+                return data
+
+            except Exception as e:
+                print(e)
+        else:
+            data = ['bad', 'bad', 'bad']
+            print('Ошибка подключения')
             return data
-
-        except Exception as e:
-            print(e)
 
 
 
