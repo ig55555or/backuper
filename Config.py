@@ -6,7 +6,9 @@ import re
 
 class Connect:
 
-    def checkconn(url):
+
+
+    def checkconn(self, url):
         try:
             ssl = True
             r = requests.get(url + "index.php", verify=ssl)
@@ -42,6 +44,38 @@ class Connect:
             print('Ошибка ' + e)
             return [ssl, 'ex', e]
 
+        # извлекаем токен
+
+    def token(self, text):
+        s1 = text.find('csrfMagicToken') + 18
+        s2 = text.find('csrfMagicName') - 6
+        token = text[s1:s2]
+        print(token)
+        return token
+
+        # авторизируемся и получаем куки и токен
+
+    def auth(self, url, ssl, pwd, user):
+        try:
+            kek = requests.get(url + "index.php", verify=ssl)
+            kek = requests.post(url + 'index.php', {
+                '__csrf_magic': self.token(kek.text),
+                'usernamefld': user,
+                'passwordfld': pwd,
+                'login': 'Sign+In',
+            }, verify=ssl)
+
+            state = 'no'
+            if kek.text.find('Sign In') < 0:
+                state = 'success'
+            data = [kek.cookies, self.token(kek.text), state]
+            return data
+
+        except Exception as e:
+            print(e)
+
+
+
 
 class CreateConfig(Connect):
     def __init__(self, url, user, pwd, path, ssl):
@@ -56,37 +90,11 @@ class CreateConfig(Connect):
         elif ssl == "False":
             self.ssl = False
 
-
-    # извлекаем токен
-    def token(self, text):
-        s1 = text.find('csrfMagicToken') + 18
-        s2 = text.find('csrfMagicName') - 6
-        token = text[s1:s2]
-        print(token)
-        return token
-
-    # авторизируемся и получаем куки и токен
-    def auth(self):
-        try:
-            kek = requests.get(self.url + "index.php", verify=self.ssl)
-            kek = requests.post(self.url + 'index.php', {
-                '__csrf_magic': self.token(kek.text),
-                'usernamefld': self.user,
-                'passwordfld': self.pwd,
-                'login': 'Sign+In',
-            }, verify=self.ssl)
-
-            data = [kek.cookies, self.token(kek.text)]
-        except Exception as e:
-            print(e)
-
-        return data
-
     #скачиваем конфиг
     def getcfg(self):
 
         try:
-            data = self.auth()
+            data = Connect().auth(self.url, self.ssl, self.pwd, self.user)
             cookies = data[0]
             token = data[1]
 
@@ -125,10 +133,6 @@ class CreateConfig(Connect):
 
 
 class Settings(Connect):
-    ##################################################
-
-
-            ##############################################
 
     def start(self):
         if (os.path.exists('settings.xml')):
@@ -160,38 +164,40 @@ class Settings(Connect):
         root = xml.Element("Config")
         url = xml.SubElement(root, "url")
         ssl = xml.SubElement(root, 'ssl')
+        user = xml.SubElement(root, "user")
+        pwd = xml.SubElement(root, "pwd")
+        path = xml.SubElement(root, "path")
+
 
         #Проверка Url
         textc = self.checkurl()
         print('Проверка подключения...')
-        status = Connect.checkconn(textc)
+        status = Connect().checkconn(textc)
         while status[1] != 'good':
             textc = self.checkurl()
-            status = Connect.checkconn(textc)
-
+            status = Connect().checkconn(textc)
 
         url.text = textc
         ssl.text = str(status[0])
-        #
+        sslbuff = status[0]
 
-
-        user = xml.SubElement(root, "user")
-
-
-        textc = input("Введите имя пользователя ")
-        while len(textc) <= 0:
-            print('Имя пользователя не может быть пустым')
+        while status[2] != 'success':
             textc = input("Введите имя пользователя ")
-        user.text = textc
+            while len(textc) <= 0:
+                print('Имя пользователя не может быть пустым')
+                textc = input("Введите имя пользователя ")
+            user.text = textc
 
-        pwd = xml.SubElement(root, "pwd")
-        textc = input("Введите пароль ")
-        while len(textc) <= 0:
-            print('Пароль не может быть пустым')
             textc = input("Введите пароль ")
-        pwd.text = textc
+            while len(textc) <= 0:
+                print('Пароль не может быть пустым')
+                textc = input("Введите пароль ")
+            pwd.text = textc
 
-        path = xml.SubElement(root, "path")
+            status = Connect().auth(url.text, sslbuff, pwd.text, user.text)
+            if status[2] != 'success': print('Имя пользователя и/или пароль неверны')
+
+
         path.text = input("Введите путь сохранения конфигов ")
 
         x = xml.ElementTree(root)
