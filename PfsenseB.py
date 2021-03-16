@@ -3,6 +3,7 @@ import os.path
 import xml.etree.ElementTree as xml
 import xml.etree.cElementTree as ET
 import re
+import datetime
 
 
 class Connect:
@@ -116,7 +117,8 @@ class CreateConfig(Connect):
         return kek.content
 
     def savecfg(self, cfg):
-        file = open(self.path + '.xml', 'wb')
+        date = datetime.datetime.now()
+        file = open(str(self.path) + date.strftime("%d-%m-%Y %H-%M") + ' config.xml', 'wb')
         file.write(cfg)
         file.close
 
@@ -149,7 +151,7 @@ class Settings(Connect):
         cfg = CreateConfig(conf[0].text, conf[2].text, conf[3].text, conf[4].text, conf[1].text)
         cfg.go()
 
-    def checkurl(self):  # Проверка url
+    def checkurl(self):  # Проверяет url и возвращает исправленный
         chckurl = 'https?://(?:www\.|)([\w.-]+).*'
         textc = input("Введите url ")
         while re.search(chckurl, textc) == None or textc.find('http') < 0:
@@ -196,7 +198,10 @@ class Settings(Connect):
             if status[2] != 'success':
                 print('Имя пользователя и/или пароль неверны')
 
-        path.text = input("Введите путь сохранения конфигов ")
+        textc = input("Введите путь сохранения конфигов ")
+        while len(textc) <= 0:
+            textc = input("Введите путь сохранения конфигов ")
+        path.text = textc
 
         x = xml.ElementTree(root)
         with open("settings.xml", "wb") as fh:
