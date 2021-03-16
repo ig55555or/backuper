@@ -1,0 +1,256 @@
+import requests
+import os.path
+from sys import platform
+import xml.etree.ElementTree as xml
+import xml.etree.cElementTree as ET
+import re
+import datetime
+from crontab import CronTab
+
+
+class Connect:
+
+    def checkconn(self, url):
+        try:
+            ssl = True
+            r = requests.get(url + "index.php", verify=ssl)
+            if r.status_code == 200:
+                print('Success connect!')
+                if r.text.find('pfSense') < 0:
+                    print('Это не pfSense')
+                    return [ssl, 'negood', r.status_code]
+                else:
+                    return [ssl, 'good', r.status_code]
+            else:
+                print('Error. Status code not 200. It is: ' + str(r.status_code))
+                return [ssl, 'bad200', r.status_code]
+
+        except requests.exceptions.SSLError:
+            print('Сертификат ssl недействителен, отключаем проверку')
+            ssl = False
+            r = requests.get(url + "index.php", verify=ssl)
+            if r.status_code == 200:
+                print('Success connect!')
+
+                if r.text.find('pfSense') < 0:
+                    print('Это не pfSense')
+                    return [ssl, 'negood', r.status_code]
+                else:
+                    return [ssl, 'good', r.status_code]
+
+            else:
+                print('Error. Status code not 200. It is: ' + str(r.status_code))
+                return [ssl, 'bad', r.status_code]
+
+        except Exception as e:
+            print('Ошибка ' + e)
+            return [ssl, 'ex', e]
+
+        # извлекаем токен
+
+    def token(self, text):
+        s1 = text.find('csrfMagicToken') + 18
+        s2 = text.find('csrfMagicName') - 6
+        token = text[s1:s2]
+        print(token)
+        return token
+
+        # авторизируемся и получаем куки и токен
+
+    def auth(self, url, ssl, pwd, user):
+        status = self.checkconn(url)
+        if status[1] == 'good':
+            try:
+                kek = requests.get(url + "index.php", verify=ssl)
+                kek = requests.post(url + 'index.php', {
+                    '__csrf_magic': self.token(kek.text),
+                    'usernamefld': user,
+                    'passwordfld': pwd,
+                    'login': 'Sign+In',
+                }, verify=ssl)
+
+                state = 'no'
+                if kek.text.find('Sign In') < 0:
+                    state = 'success'
+                data = [kek.cookies, self.token(kek.text), state]
+                return data
+
+            except Exception as e:
+                print(e)
+        else:
+            data = ['bad', 'bad', 'bad']
+            print('Ошибка подключения')
+            return data
+
+
+class CreateConfig(Connect):
+    def __init__(self, url, user, pwd, path, ssl):
+        self.url = url
+        self.user = user
+        self.pwd = pwd
+        self.path = path
+        self.ssl = False
+
+        if ssl == "True":
+            self.sll = True
+        elif ssl == "False":
+            self.ssl = False
+
+    # скачиваем конфиг
+    def getcfg(self):
+
+        try:
+            data = Connect().auth(self.url, self.ssl, self.pwd, self.user)
+            cookies = data[0]
+            token = data[1]
+
+            kek = requests.post(self.url + 'diag_backup.php', {
+                '__csrf_magic': token,
+                'backuparea': '',
+                'donotbackuprrd': 'yes',
+                'encrypt_password': '',
+                'download': 'Download configuration as XML',
+                'restorearea': '',
+                'conffile': '(binary)',
+                'decrypt_password': '',
+            }, verify=self.ssl, cookies=cookies)
+        except Exception as e:
+            print(e)
+        return kek.content
+
+    def savecfg(self, cfg):
+        date = datetime.datetime.now()
+        file = open(str(self.path) + date.strftime("%d-%m-%Y %H-%M") + ' config.xml', 'wb')
+        file.write(cfg)
+        file.close
+
+    def go(self):  # функция сохраннеия бэкапа
+        try:
+            r = requests.get(self.url + "index.php", verify=self.ssl)
+            if r.status_code == 200:
+                print('Success!')
+                cfg = self.getcfg()
+                self.savecfg(cfg)
+            else:
+                print('Error.')
+        except Exception as e:
+            print(e)
+
+
+class Settings(Connect):
+
+    def start(self):
+        if (os.path.exists('settings.xml')):
+            print('Конфигурационный файл найден ')
+            self.startpars()
+        else:
+            print('Конфигурационный файл не найден, создание конфигурационного файла: ')
+            self.crateconfxml()
+            self.startpars()
+
+    def startpars(self):
+        conf = self.readconfxml()
+        cfg = CreateConfig(conf[0].text, conf[2].text, conf[3].text, conf[4].text, conf[1].text)
+        cfg.go()
+
+    def checkurl(self):  # Проверяет url и возвращает исправленный
+        chckurl = 'https?://(?:www\.|)([\w.-]+).*'
+        textc = input("Введите url ")
+        while re.search(chckurl, textc) == None or textc.find('http') < 0:
+            print('Неверный url')
+            textc = input("Введите url ")
+        url = re.search(chckurl, textc).string + '/'
+        return url
+
+    def crateconfxml(self):
+
+        root = xml.Element("Config")
+        url = xml.SubElement(root, "url")
+        ssl = xml.SubElement(root, 'ssl')
+        user = xml.SubElement(root, "user")
+        pwd = xml.SubElement(root, "pwd")
+        path = xml.SubElement(root, "path")
+        freq = xml.SubElement(root, 'freq') #как часто обновлять конфиг
+
+        # Проверка Url
+        textc = self.checkurl()
+        print('Проверка подключения...')
+        status = Connect().checkconn(textc)
+        while status[1] != 'good':
+            textc = self.checkurl()
+            status = Connect().checkconn(textc)
+
+        url.text = textc
+        ssl.text = str(status[0])
+        sslbuff = status[0]
+
+        while status[2] != 'success':
+            textc = input("Введите имя пользователя ")
+            while len(textc) <= 0:
+                print('Имя пользователя не может быть пустым')
+                textc = input("Введите имя пользователя ")
+            user.text = textc
+
+            textc = input("Введите пароль ")
+            while len(textc) <= 0:
+                print('Пароль не может быть пустым')
+                textc = input("Введите пароль ")
+            pwd.text = textc
+
+            status = Connect().auth(url.text, sslbuff, pwd.text, user.text)
+            if status[2] != 'success':
+                print('Имя пользователя и/или пароль неверны')
+
+        textc = input("Введите путь сохранения конфигов ")
+        while len(textc) <= 0:
+            textc = input("Введите путь сохранения конфигов ")
+        path.text = textc
+
+        if platform == "linux" or platform == "linux2":
+            print('Сейчас будет создана задача crontab на скачивание конфига.\nВведите имя пользователя для которого будет сздана задача: ')
+            cronuser = input()
+            while len(cronuser) <= 0:
+                cronuser = input('Введите имя пользователя для которого будет сздана задача: ')
+
+            try:
+                my_cron = CronTab(user=cronuser)
+                job = my_cron.new(command=os.getcwd()+'/main.py')
+
+                textc = input('Раз во сколько часов обновлять конфиг: ')
+
+                while self.isint(textc) == False and int(textc) > 0:
+                    if self.isint(textc) == False:
+                        print('Введено не число')
+                    elif int(textc) <= 0:
+                        print('Часов должно быть больше 0')
+
+                job.hour.every(int(textc))
+                my_cron.write()
+
+
+            except Exception as e:
+                print(e)
+
+
+
+
+        x = xml.ElementTree(root)
+        with open("settings.xml", "wb") as fh:
+            x.write(fh)
+
+
+
+    def readconfxml(self):
+        try:
+            tree = ET.parse("settings.xml")
+            root = tree.getroot()
+        except Exception as e:
+            print(e)
+        return root
+
+    def isint(self, s):
+        try:
+            int(s)
+            return True
+        except ValueError:
+            return False
