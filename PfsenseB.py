@@ -1,9 +1,11 @@
 import requests
 import os.path
+from sys import platform
 import xml.etree.ElementTree as xml
 import xml.etree.cElementTree as ET
 import re
 import datetime
+from crontab import CronTab
 
 
 class Connect:
@@ -168,6 +170,7 @@ class Settings(Connect):
         user = xml.SubElement(root, "user")
         pwd = xml.SubElement(root, "pwd")
         path = xml.SubElement(root, "path")
+        freq = xml.SubElement(root, 'freq') #как часто обновлять конфиг
 
         # Проверка Url
         textc = self.checkurl()
@@ -203,9 +206,39 @@ class Settings(Connect):
             textc = input("Введите путь сохранения конфигов ")
         path.text = textc
 
+        if platform == "linux" or platform == "linux2":
+            print('Сейчас будет создана задача crontab на скачивание конфига.\nВведите имя пользователя для которого будет сздана задача: ')
+            cronuser = input()
+            while len(cronuser) <= 0:
+                cronuser = input('Введите имя пользователя для которого будет сздана задача: ')
+
+            try:
+                my_cron = CronTab(user=cronuser)
+                job = my_cron.new(command=os.getcwd()+'/main.py')
+
+                textc = input('Раз во сколько часов обновлять конфиг: ')
+
+                while self.isint(textc) == False and int(textc) > 0:
+                    if self.isint(textc) == False:
+                        print('Введено не число')
+                    elif int(textc) <= 0:
+                        print('Часов должно быть больше 0')
+
+                job.hour.every(int(textc))
+                my_cron.write()
+
+
+            except Exception as e:
+                print(e)
+
+
+
+
         x = xml.ElementTree(root)
         with open("settings.xml", "wb") as fh:
             x.write(fh)
+
+
 
     def readconfxml(self):
         try:
@@ -214,3 +247,10 @@ class Settings(Connect):
         except Exception as e:
             print(e)
         return root
+
+    def isint(self, s):
+        try:
+            int(s)
+            return True
+        except ValueError:
+            return False
